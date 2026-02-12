@@ -18,24 +18,24 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
+      # --- UPDATE 1: THE PROMPT (Replaces your old Skill File) ---
       - name: Construct Prompt
         id: prompt
         uses: actions/github-script@v7
         with:
           script: |
             const issue = context.payload.issue;
-            // Simplified prompt for the video
             const prompt = `You are the Oz Agent. Fix GitHub Issue #${issue.number}.
 
             **Issue Title**: ${issue.title}
             **Description**: ${issue.body}
 
-            **CRITICAL INSTRUCTIONS**:
-            1. Analyze the code and fix the bug described.
-            2. **DO NOT** run any git commands (no git add, commit, push).
-            3. **DO NOT** create a PR or use the 'gh' CLI.
-            4. JUST EDIT THE FILES on the file system.
-            5. When you are done editing, exit. The system will handle the PR.
+            **INSTRUCTIONS**:
+            1. Analyze the code and fix the bug.
+            2. **DO NOT** run git commands.
+            3. **MANDATORY**: Create a file named 'pr_description.txt'.
+            4. In that file, write a short summary of what you fixed.
+            5. EXIT when done.
             `;
             core.setOutput('prompt', prompt);
 
@@ -45,38 +45,53 @@ jobs:
         with:
           prompt: ${{ steps.prompt.outputs.prompt }}
           warp_api_key: ${{ secrets.WARP_API_KEY }}
-          # We don't need GH_TOKEN here anymore because the agent isn't using the CLI!
 
       - name: Create PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          # --- UPDATE 2: THE TOKEN (Bypasses Permission Errors) ---
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
-          # 1. configure git
+          # 1. Check if Agent did work
+          if [[ -z $(git status --porcelain) ]]; then
+             echo "No changes made."
+             exit 0
+          fi
+
+          # 2. Configure Git
           git config user.name "Oz Agent"
           git config user.email "agent@warp.dev"
 
-          # 2. Check if the agent actually did work
-          if [[ -z $(git status --porcelain) ]]; then
-            echo "Agent made no changes."
-            # Post a cleaner error message, not the whole log
-            gh issue comment "$ISSUE_NUMBER" --body "I analyzed the issue but couldn't identify the code to fix. Please check the logs."
-            exit 0
+          # --- UPDATE 3: THE DESCRIPTION (Reads the Agent's note) ---
+          if [ -f pr_description.txt ]; then
+            PR_BODY=$(cat pr_description.txt)
+            rm pr_description.txt
+          else
+            PR_BODY="I fixed the issue. (Agent did not provide a summary)."
           fi
 
-          # 3. Create Branch and Push
+          # 3. Commit and Push
           BRANCH_NAME="fix/issue-$ISSUE_NUMBER"
           git checkout -b "$BRANCH_NAME"
           git add .
           git commit -m "Fix for Issue #$ISSUE_NUMBER"
           git push origin "$BRANCH_NAME" --force
 
-          # 4. Open PR
-          PR_URL=$(gh pr create \
-            --title "Fix: ${{ github.event.issue.title }}" \
-            --body "I have implemented a fix for Issue #$ISSUE_NUMBER. Please review." \
-            --base main \
-            --head "$BRANCH_NAME")
+          # --- UPDATE 4: THE SAFETY CHECK (Prevents crashes) ---
+          EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --json url --jq '.[0].url')
 
-          # 5. Comment the Success Link
-          gh issue comment "$ISSUE_NUMBER" --body "✅ **Fix Ready!** I have created a Pull Request: $PR_URL"
+          if [ -z "$EXISTING_PR" ]; then
+            PR_URL=$(gh pr create \
+              --repo ${{ github.repository }} \
+              --title "Fix: ${{ github.event.issue.title }}" \
+              --body "$PR_BODY" \
+              --base main \
+              --head "$BRANCH_NAME")
+          else
+            echo "PR already exists, updating..."
+            PR_URL=$EXISTING_PR
+            gh pr edit "$PR_URL" --body "$PR_BODY"
+          fi
+
+          # 4. Post Success Comment
+          gh issue comment "$ISSUE_NUMBER" --repo ${{ github.repository }} --body "✅ **Fix Ready!**\n\n**Agent Summary:**\n$PR_BODY\n\n[View Pull Request]($PR_URL)"
