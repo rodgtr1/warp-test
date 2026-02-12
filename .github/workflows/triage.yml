@@ -1,21 +1,3 @@
-# ======================================================================================
-# Workflow: Auto Fix Issue
-# ======================================================================================
-# Usage:
-#   - Apply the label 'oz-agent' to any GitHub Issue.
-#   - This workflow will trigger, analyze the issue, and attempt to write code to fix it.
-#
-# Setup:
-#   - Ensure WARP_API_KEY is set in Repository Secrets.
-#   - Ensure the Action has write permissions for contents, issues, and pull-requests.
-#
-# Expected Output:
-#   - If a fix is found: A new Pull Request (fix/issue-NUMBER) is created and linked to the issue.
-#   - If no fix is found: The Agent comments on the issue explaining why.
-#
-# When to use:
-#   - Use this to delegate bug fixes, small features, or chore tasks to the Oz Agent.
-# ======================================================================================
 name: Auto Fix Issue
 
 on:
@@ -24,7 +6,6 @@ on:
 
 jobs:
   auto_fix:
-    # Only run if the label added is 'oz-agent'
     if: github.event.label.name == 'oz-agent'
     name: Auto Fix Issue
     runs-on: ubuntu-latest
@@ -42,100 +23,60 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
             const issue = context.payload.issue;
+            // Simplified prompt for the video
+            const prompt = `You are the Oz Agent. Fix GitHub Issue #${issue.number}.
 
-            // Fetch all previous comments on the issue to give the agent full context
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.number,
-              per_page: 100,
-            });
+            **Issue Title**: ${issue.title}
+            **Description**: ${issue.body}
 
-            const description = issue.body || 'No description provided.';
-
-            let commentsNote = 'There are no previous comments on this issue.';
-            let commentsInstructions = '';
-            if (comments.length) {
-              const commentsText = comments
-                .map(c => `- ${c.user?.login || 'unknown'} (${c.created_at}): ${c.body}`)
-                .join('\\n');
-              fs.writeFileSync('issue_comments.txt', commentsText, 'utf8');
-              commentsNote = 'All previous issue comments are stored in \`issue_comments.txt\` in the workspace.';
-              commentsInstructions = `
-                -   Optionally, read \`issue_comments.txt\` to understand prior discussion and clarifications.`;
-            }
-
-            const prompt = `You are an expert software engineer and the Oz Agent.
-            You have been assigned to fix GitHub Issue #${issue.number}.
-
-            **Issue Details**:
-            - **Title**: ${issue.title}
-            - **Description**: ${description}
-
-            **Previous Issue Comments**:
-            ${commentsNote}
-
-            **Instructions**:
-            1.  **Analyze**:
-                -   Carefully read the issue description above to understand the problem.${commentsInstructions}
-            2.  **Fix**: Implement the changes necessary to resolve the issue.
-            3.  **Verify**: Ensure the code is correct and follows existing patterns.
-            4.  **Output**: Do not output the diff. Provide a brief summary of what you changed.
+            **CRITICAL INSTRUCTIONS**:
+            1. Analyze the code and fix the bug described.
+            2. **DO NOT** run any git commands (no git add, commit, push).
+            3. **DO NOT** create a PR or use the 'gh' CLI.
+            4. JUST EDIT THE FILES on the file system.
+            5. When you are done editing, exit. The system will handle the PR.
             `;
             core.setOutput('prompt', prompt);
 
       - name: Run Oz Agent
         uses: warpdotdev/oz-agent-action@v1
-        env:
-          GH_TOKEN: ${{ github.token }}
         id: agent
         with:
           prompt: ${{ steps.prompt.outputs.prompt }}
           warp_api_key: ${{ secrets.WARP_API_KEY }}
-          profile: ${{ vars.WARP_AGENT_PROFILE || '' }}
+          # We don't need GH_TOKEN here anymore because the agent isn't using the CLI!
 
-      - name: Create PR and Comment
+      - name: Create PR
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
-          AGENT_OUTPUT: ${{ steps.agent.outputs.agent_output }}
         run: |
-          # Remove temporary files that should not be committed
-          rm -f issue_comments.txt issue_description.txt
-
-          # Check for changes
-          if [[ -z $(git status --porcelain) ]]; then
-            echo "No changes made by Oz Agent."
-            gh issue comment "$ISSUE_NUMBER" --body "I analyzed the issue but couldn't determine a code change to make. \\n\\n**Agent Output:**\\n$AGENT_OUTPUT"
-            exit 0
-          fi
-
-          BRANCH_NAME="fix/issue-$ISSUE_NUMBER"
-
+          # 1. configure git
           git config user.name "Oz Agent"
           git config user.email "agent@warp.dev"
 
+          # 2. Check if the agent actually did work
+          if [[ -z $(git status --porcelain) ]]; then
+            echo "Agent made no changes."
+            # Post a cleaner error message, not the whole log
+            gh issue comment "$ISSUE_NUMBER" --body "I analyzed the issue but couldn't identify the code to fix. Please check the logs."
+            exit 0
+          fi
+
+          # 3. Create Branch and Push
+          BRANCH_NAME="fix/issue-$ISSUE_NUMBER"
           git checkout -b "$BRANCH_NAME"
           git add .
           git commit -m "Fix for Issue #$ISSUE_NUMBER"
           git push origin "$BRANCH_NAME" --force
 
-          # Create PR
-          # Escape title to handle special chars
-          TITLE="Fix Issue #$ISSUE_NUMBER: ${{ github.event.issue.title }}"
-          BODY="This PR attempts to fix Issue #$ISSUE_NUMBER.
+          # 4. Open PR
+          PR_URL=$(gh pr create \
+            --title "Fix: ${{ github.event.issue.title }}" \
+            --body "I have implemented a fix for Issue #$ISSUE_NUMBER. Please review." \
+            --base main \
+            --head "$BRANCH_NAME")
 
-          **Agent Summary**:
-          $AGENT_OUTPUT
-
-          Closes #$ISSUE_NUMBER"
-
-          # Create PR and capture URL
-          PR_URL=$(gh pr create --title "$TITLE" --body "$BODY" --base main --head "$BRANCH_NAME")
-
-          echo "Created PR: $PR_URL"
-
-          # Comment on Issue
-          gh issue comment "$ISSUE_NUMBER" --body "I have created a fix for this issue: $PR_URL"
+          # 5. Comment the Success Link
+          gh issue comment "$ISSUE_NUMBER" --body "✅ **Fix Ready!** I have created a Pull Request: $PR_URL"
