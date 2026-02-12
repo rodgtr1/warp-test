@@ -31,28 +31,7 @@ export async function authenticateUser(email: string, password: string): Promise
     expectedEmail: VALID_EMAIL,
   });
 
-  // =================================================================
-  // BUG #1: Using assignment operator (=) instead of equality (===)
-  // The expression (email = VALID_EMAIL) assigns VALID_EMAIL to email
-  // and evaluates to the assigned value (truthy string), so the
-  // condition depends only on password check
-  // =================================================================
-  if (email = VALID_EMAIL && password === VALID_PASSWORD) {
-    logger.auth('Credential check passed, verifying email match');
-    
-    // Secondary check fails because email was reassigned above
-    // when the user provides a DIFFERENT email than VALID_EMAIL
-    if (email !== VALID_EMAIL) {
-      logger.error('Authentication failed: Email mismatch after assignment', {
-        emailValue: email,
-        expectedEmail: VALID_EMAIL,
-      });
-      return {
-        success: false,
-        error: 'Invalid email or password'
-      };
-    }
-
+  if (email === VALID_EMAIL && password === VALID_PASSWORD) {
     const user: User = {
       id: 'user-demo',
       email: VALID_EMAIL,
