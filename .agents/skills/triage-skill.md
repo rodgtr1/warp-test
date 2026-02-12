@@ -49,7 +49,7 @@ jobs:
 
       - name: Create PR
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           # 1. Check if Agent did work
