@@ -8,19 +8,22 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write # Important: Lets the agent comment back on the issue
+      issues: write # Crucial: Allows the agent to comment
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Run Warp Agent
-        uses: warpdotdev/warp-agent-action@v1
-        with:
-          # We pass the issue body as "Context" so the agent knows what to look for
-          prompt: |
-            Analyze this issue and find the bug in the codebase.
-            Issue Number: ${{ github.event.issue.number }}
-            Issue Title: ${{ github.event.issue.title }}
-            Issue Body: ${{ github.event.issue.body }}
-          skill: .warp/triage-skill.md
-          warp_api_key: ${{ secrets.WARP_API_KEY }}
+      # FIX 1: Use setup-oz (The CLI Installer) instead of the generic action
+      - name: Install Oz CLI
+        uses: warpdotdev/setup-oz@v1
+
+      # FIX 2: Run Oz manually so we can pass the Skill and the Token
+      - name: Run Triage Agent
+        env:
+          WARP_API_KEY: ${{ secrets.WARP_API_KEY }}
+          # IMPORTANT: We map GITHUB_TOKEN to GH_TOKEN so the 'gh' tool works
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          oz run \
+            --skill .warp/triage-skill.md \
+            --context "Issue #${{ github.event.issue.number }}: ${{ github.event.issue.title }} - ${{ github.event.issue.body }}"
