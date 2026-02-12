@@ -52,6 +52,8 @@ jobs:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
+          echo "Checking who I am..."
+          gh auth status
           # 1. Check if Agent did work
           if [[ -z $(git status --porcelain) ]]; then
              echo "No changes made."
