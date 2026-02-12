@@ -1,0 +1,70 @@
+{
+  "rooms": [
+    {
+      "id": "room-1",
+      "name": "Summit",
+      "capacity": 10,
+      "floor": 3,
+      "amenities": ["projector", "whiteboard", "video-conferencing"]
+    },
+    {
+      "id": "room-2",
+      "name": "Harbor",
+      "capacity": 6,
+      "floor": 2,
+      "amenities": ["whiteboard", "tv-display"]
+    },
+    {
+      "id": "room-3",
+      "name": "Grove",
+      "capacity": 4,
+      "floor": 2,
+      "amenities": ["whiteboard"]
+    },
+    {
+      "id": "room-4",
+      "name": "Skyline",
+      "capacity": 20,
+      "floor": 5,
+      "amenities": ["projector", "whiteboard", "video-conferencing", "catering"]
+    }
+  ],
+  "bookings": [
+    {
+      "id": "booking-1",
+      "roomId": "room-1",
+      "date": "2026-02-12",
+      "startTime": "09:00",
+      "endTime": "10:00",
+      "title": "Sprint Planning",
+      "organizer": "alice@company.com"
+    },
+    {
+      "id": "booking-2",
+      "roomId": "room-1",
+      "date": "2026-02-12",
+      "startTime": "14:00",
+      "endTime": "15:30",
+      "title": "Design Review",
+      "organizer": "bob@company.com"
+    },
+    {
+      "id": "booking-3",
+      "roomId": "room-2",
+      "date": "2026-02-12",
+      "startTime": "10:00",
+      "endTime": "11:00",
+      "title": "1:1 with Manager",
+      "organizer": "demo@bookit.com"
+    },
+    {
+      "id": "booking-4",
+      "roomId": "room-4",
+      "date": "2026-02-12",
+      "startTime": "13:00",
+      "endTime": "14:00",
+      "title": "All Hands Meeting",
+      "organizer": "ceo@company.com"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+name: AI Triage Bot
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write # Important: Lets the agent comment back on the issue
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Warp Agent
+        uses: warpdotdev/warp-agent-action@v1
+        with:
+          # We pass the issue body as "Context" so the agent knows what to look for
+          prompt: |
+            Analyze this issue and find the bug in the codebase.
+            Issue Number: ${{ github.event.issue.number }}
+            Issue Title: ${{ github.event.issue.title }}
+            Issue Body: ${{ github.event.issue.body }}
+          skill: .warp/triage-skill.md
+        env:
+          WARP_API_KEY: ${{ secrets.WARP_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
